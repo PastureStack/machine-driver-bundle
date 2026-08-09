@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=../sources.lock.env
+source "$repo_root/sources.lock.env"
+
+go_parallelism="${GO_PARALLELISM:-4}"
+printf '%s\n' "$go_parallelism" | grep -Eq '^[1-8]$'
+export GOMAXPROCS="${GOMAXPROCS:-$go_parallelism}"
+
+for script in build-binaries package prepare-sources test validate; do
+  bash -n "$repo_root/scripts/$script"
+done
+python3 - "$repo_root/scripts/collect-licenses.py" \
+  "$repo_root/scripts/test-collect-licenses.py" \
+  "$repo_root/scripts/verify-govulncheck.py" <<'PY'
+import sys
+
+for path in sys.argv[1:]:
+    with open(path, encoding="utf-8") as stream:
+        compile(stream.read(), path, "exec")
+PY
+python3 "$repo_root/scripts/test-collect-licenses.py"
+"$repo_root/scripts/validate"
+
+workdir=$(mktemp -d "${TMPDIR:-/tmp}/pasturestack-machine-driver-bundle-test.XXXXXX")
+trap 'rm -rf "$workdir"' EXIT
+mkdir -p "$workdir/first" "$workdir/second" "$workdir/cache" \
+  "$workdir/extracted" "$workdir/storage"
+
+DOWNLOAD_CACHE_DIR="$workdir/cache" \
+  "$repo_root/scripts/prepare-sources" "$workdir/sources"
+"$repo_root/scripts/build-binaries" "$workdir/sources" \
+  "$workdir/sources/source/bin"
+
+machine_source="$workdir/sources/source"
+packet_source="$workdir/sources/packet-source"
+
+(
+  cd "$machine_source"
+  export GOTOOLCHAIN=local
+  export GOFLAGS="-mod=readonly -p=$go_parallelism"
+  go mod verify
+
+  docker_dependencies=$(go list -deps ./cmd/docker-machine | \
+    grep '^github.com/docker/docker' || true)
+  disallowed_dependencies=$(printf '%s\n' "$docker_dependencies" | \
+    grep -Ev '^github.com/docker/docker/(api($|/)|client$)' || true)
+  if [ -n "$disallowed_dependencies" ]; then
+    printf 'MACHINE_DRIVER_BUNDLE_DOCKER_SERVER_CODE_PRESENT\n%s\n' \
+      "$disallowed_dependencies" >&2
+    exit 1
+  fi
+
+  if go list -deps ./cmd/docker-machine | grep -Fqx 'golang.org/x/crypto/openpgp'; then
+    printf 'MACHINE_DRIVER_BUNDLE_UNMAINTAINED_OPENPGP_PRESENT target=docker-machine\n' >&2
+    exit 1
+  fi
+
+  packages=$(go list ./... | grep -v '/cmd')
+  MACHINE_STORAGE_PATH="$workdir/storage" go test -count=1 $packages
+
+  race_packages=$(go list ./commands/... ./drivers/... ./libmachine/... | \
+    grep -v '/libmachine/mcnutils$')
+  MACHINE_STORAGE_PATH="$workdir/storage" go test -race -count=1 $race_packages
+)
+
+(
+  cd "$packet_source"
+  export GOTOOLCHAIN=local
+  export GOFLAGS="-mod=readonly -p=$go_parallelism"
+  go mod verify
+  if go list -deps ./ | grep -Fqx 'golang.org/x/crypto/openpgp'; then
+    printf 'MACHINE_DRIVER_BUNDLE_UNMAINTAINED_OPENPGP_PRESENT target=packet\n' >&2
+    exit 1
+  fi
+  go test -race -count=1 ./...
+)
+
+OUTPUT_DIR="$workdir/first" DOWNLOAD_CACHE_DIR="$workdir/cache" SOURCE_DATE_EPOCH=0 \
+  "$repo_root/scripts/package"
+OUTPUT_DIR="$workdir/second" DOWNLOAD_CACHE_DIR="$workdir/cache" SOURCE_DATE_EPOCH=0 \
+  "$repo_root/scripts/package"
+
+artifact_name="machine-driver-bundle-${BUNDLE_VERSION}-${TARGET_PLATFORM}.tar.xz"
+cmp "$workdir/first/$artifact_name" "$workdir/second/$artifact_name"
+
+expected_entries=$(printf '%s\n' \
+  docker-machine \
+  docker-machine-driver-packet \
+  machine-driver-bundle-DEPENDENCY-LICENSES.txt \
+  machine-driver-bundle-LICENSES.txt \
+  machine-driver-bundle-PROVIDER-LIFECYCLE.json \
+  machine-driver-bundle-SECURITY-VEX.json \
+  machine-driver-bundle-SOURCES.txt \
+  machine-driver-bundle-THIRD-PARTY-NOTICES.txt)
+actual_entries=$(tar -tJf "$workdir/first/$artifact_name")
+if [ "$actual_entries" != "$expected_entries" ]; then
+  printf 'MACHINE_DRIVER_BUNDLE_ARCHIVE_LAYOUT_MISMATCH\nactual:\n%s\nexpected:\n%s\n' \
+    "$actual_entries" "$expected_entries" >&2
+  exit 1
+fi
+
+tar -xJf "$workdir/first/$artifact_name" -C "$workdir/extracted"
+printf '%s  %s\n' "$DOCKER_MACHINE_BINARY_SHA256" \
+  "$workdir/extracted/docker-machine" | sha256sum -c - >/dev/null
+printf '%s  %s\n' "$PACKET_DRIVER_BINARY_SHA256" \
+  "$workdir/extracted/docker-machine-driver-packet" | sha256sum -c - >/dev/null
+printf '%s  %s\n' "$DEPENDENCY_LICENSES_SHA256" \
+  "$workdir/extracted/machine-driver-bundle-DEPENDENCY-LICENSES.txt" | \
+  sha256sum -c - >/dev/null
+
+"$workdir/extracted/docker-machine" version | grep -Fx \
+  "docker-machine version $BUNDLE_VERSION, build ${DOCKER_MACHINE_UPSTREAM_COMMIT:0:8}" >/dev/null
+PATH="$workdir/extracted:$PATH" \
+  "$workdir/extracted/docker-machine" --storage-path "$workdir/storage" ls >/dev/null
+PATH="$workdir/extracted:$PATH" timeout 20 \
+  "$workdir/extracted/docker-machine" --storage-path "$workdir/storage" \
+  create --driver packet --help >"$workdir/packet-help.txt"
+grep -F -- '--packet-api-key' "$workdir/packet-help.txt" >/dev/null
+grep -F -- '--packet-project-id' "$workdir/packet-help.txt" >/dev/null
+
+printf 'MACHINE_DRIVER_BUNDLE_TEST_OK version=%s full_upstream=1 race_core=1 packet_race=1 reproducible=1 archive_layout=1 source_signature=1 dependency_graph=1\n' \
+  "$BUNDLE_VERSION"

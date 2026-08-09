@@ -1,0 +1,65 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/PastureStack/machine-driver-bundle/security/openvex/0.16.4",
+  "author": "PastureStack Security",
+  "timestamp": "2026-08-09T18:30:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {"name": "CVE-2020-8911"},
+      "products": [{"@id": "pkg:golang/github.com/aws/aws-sdk-go@v1.55.8"}],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The affected S3 encryption client is not imported by the machine-management command and is absent from the linked binary."
+    },
+    {
+      "vulnerability": {"name": "CVE-2020-8912"},
+      "products": [{"@id": "pkg:golang/github.com/aws/aws-sdk-go@v1.55.8"}],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The affected S3 encryption client is not imported by the machine-management command and is absent from the linked binary."
+    },
+    {
+      "vulnerability": {"name": "CVE-2026-33997"},
+      "products": [{"@id": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"}],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The bundle links only Docker client and API-type packages; the affected daemon plugin-privilege validation implementation is absent."
+    },
+    {
+      "vulnerability": {"name": "CVE-2026-34040"},
+      "products": [{"@id": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"}],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The bundle links only Docker client and API-type packages; the affected daemon authorization-plugin request handling is absent."
+    },
+    {
+      "vulnerability": {"name": "CVE-2026-41567"},
+      "products": [{"@id": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"}],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The bundle links only Docker client and API-type packages; the affected daemon archive-upload extraction path is absent."
+    },
+    {
+      "vulnerability": {"name": "CVE-2026-41568"},
+      "products": [{"@id": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"}],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The bundle links only Docker client and API-type packages; the affected daemon docker-cp archive extraction implementation is absent."
+    },
+    {
+      "vulnerability": {"name": "CVE-2026-42306"},
+      "products": [{"@id": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"}],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The bundle links only Docker client and API-type packages; the affected daemon docker-cp bind-mount setup implementation is absent."
+    },
+    {
+      "vulnerability": {"name": "GO-2026-5932"},
+      "products": [{"@id": "pkg:golang/golang.org/x/crypto@v0.54.0"}],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The unmaintained OpenPGP package is not imported by either command and is absent from both linked binaries."
+    }
+  ]
+}

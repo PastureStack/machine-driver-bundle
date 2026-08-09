@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=../sources.lock.env
+source "$repo_root/sources.lock.env"
+
+output_dir="${OUTPUT_DIR:-$repo_root/dist/artifacts}"
+cache_dir="${DOWNLOAD_CACHE_DIR:-$repo_root/.cache/downloads}"
+source_date_epoch="${SOURCE_DATE_EPOCH:-0}"
+artifact_name="machine-driver-bundle-${BUNDLE_VERSION}-${TARGET_PLATFORM}.tar.xz"
+
+for command_name in awk cat find go grep install mktemp mv python3 sha256sum tar timeout xz; do
+  command -v "$command_name" >/dev/null || {
+    printf 'MACHINE_DRIVER_BUNDLE_COMMAND_MISSING command=%s\n' "$command_name" >&2
+    exit 1
+  }
+done
+
+printf '%s\n' "$BUNDLE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+mkdir -p "$output_dir" "$cache_dir"
+workdir=$(mktemp -d "${TMPDIR:-/tmp}/pasturestack-machine-driver-bundle.XXXXXX")
+artifact_tmp="$output_dir/.${artifact_name}.tmp.$$"
+
+cleanup() {
+  rm -rf "$workdir"
+  rm -f "$artifact_tmp"
+}
+trap cleanup EXIT
+
+DOWNLOAD_CACHE_DIR="$cache_dir" "$repo_root/scripts/prepare-sources" "$workdir/sources"
+"$repo_root/scripts/build-binaries" "$workdir/sources" "$workdir/bin"
+
+stage="$workdir/stage"
+storage="$workdir/storage"
+mkdir "$stage" "$storage"
+install -m 0755 "$workdir/bin/docker-machine" "$stage/docker-machine"
+install -m 0755 "$workdir/bin/docker-machine-driver-packet" \
+  "$stage/docker-machine-driver-packet"
+
+go_root=$(go env GOROOT)
+printf '%s  %s\n' "$GO_LICENSE_SHA256" "$go_root/LICENSE" | \
+  sha256sum -c - >/dev/null
+
+{
+  printf '===== Go standard library %s — BSD-3-Clause =====\n\n' "$GO_VERSION"
+  cat "$go_root/LICENSE"
+  printf '\n\n===== Docker Machine source %s — Apache-2.0 =====\n\n' \
+    "$DOCKER_MACHINE_UPSTREAM_TAG"
+  cat "$workdir/sources/source/LICENSE"
+  printf '\n\n===== Equinix machine driver source %s — BSD-3-Clause =====\n\n' \
+    "$PACKET_DRIVER_UPSTREAM_TAG"
+  cat "$workdir/sources/packet-source/LICENSE"
+} >"$stage/machine-driver-bundle-LICENSES.txt"
+
+dependency_licenses="$stage/machine-driver-bundle-DEPENDENCY-LICENSES.txt"
+python3 "$repo_root/scripts/collect-licenses.py" \
+  --machine-source "$workdir/sources/source" \
+  --packet-source "$workdir/sources/packet-source" \
+  --machine-binary "$stage/docker-machine" \
+  --packet-binary "$stage/docker-machine-driver-packet" \
+  >"$dependency_licenses"
+chmod 0644 "$dependency_licenses"
+printf '%s  %s\n' "$DEPENDENCY_LICENSES_SHA256" \
+  "$dependency_licenses" | sha256sum -c - >/dev/null
+
+install -m 0644 "$repo_root/provider-lifecycle.json" \
+  "$stage/machine-driver-bundle-PROVIDER-LIFECYCLE.json"
+install -m 0644 "$repo_root/security/openvex.json" \
+  "$stage/machine-driver-bundle-SECURITY-VEX.json"
+install -m 0644 "$repo_root/sources.lock.env" \
+  "$stage/machine-driver-bundle-SOURCES.txt"
+install -m 0644 "$repo_root/THIRD-PARTY-NOTICES.txt" \
+  "$stage/machine-driver-bundle-THIRD-PARTY-NOTICES.txt"
+
+PATH="$stage:$PATH" "$stage/docker-machine" --storage-path "$storage" ls >/dev/null
+PATH="$stage:$PATH" timeout 20 "$stage/docker-machine" --storage-path "$storage" \
+  create --driver packet --help >"$workdir/packet-help.txt"
+grep -F -- '--packet-api-key' "$workdir/packet-help.txt" >/dev/null
+grep -F -- '--packet-project-id' "$workdir/packet-help.txt" >/dev/null
+
+find "$stage" -exec touch -h -d "@${source_date_epoch}" {} +
+tar --sort=name --format=gnu --mtime="@${source_date_epoch}" \
+  --owner=0 --group=0 --numeric-owner -cf - -C "$stage" \
+  docker-machine \
+  docker-machine-driver-packet \
+  machine-driver-bundle-DEPENDENCY-LICENSES.txt \
+  machine-driver-bundle-LICENSES.txt \
+  machine-driver-bundle-PROVIDER-LIFECYCLE.json \
+  machine-driver-bundle-SECURITY-VEX.json \
+  machine-driver-bundle-SOURCES.txt \
+  machine-driver-bundle-THIRD-PARTY-NOTICES.txt \
+  | xz --threads=1 -9e >"$artifact_tmp"
+mv "$artifact_tmp" "$output_dir/$artifact_name"
+
+printf 'MACHINE_DRIVER_BUNDLE_PACKAGE_OK version=%s platform=%s artifact=%s sha256=%s\n' \
+  "$BUNDLE_VERSION" "$TARGET_PLATFORM" "$output_dir/$artifact_name" \
+  "$(sha256sum "$output_dir/$artifact_name" | awk '{print $1}')"

@@ -1,0 +1,220 @@
+name: Security release gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  gate:
+    name: Verify, test, reproduce, and scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      SOURCE_DATE_EPOCH: "0"
+      TRIVY_IMAGE: aquasec/trivy:0.73.0@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c
+      ARTIFACT_NAME: machine-driver-bundle-0.16.4-linux-amd64.tar.xz
+
+    steps:
+      - name: Check out the reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the exact Go toolchain
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.6
+          check-latest: false
+          cache: false
+
+      - name: Install the exact Python toolchain
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14.6'
+          check-latest: false
+
+      - name: Prepare evidence directory
+        run: mkdir -p evidence
+
+      - name: Validate, test, race-test, and reproduce
+        id: test
+        run: |
+          set -o pipefail
+          make test 2>&1 | tee evidence/build-test.log
+
+      - name: Build the reviewed candidate package
+        id: package
+        run: |
+          set -o pipefail
+          make package 2>&1 | tee evidence/package.log
+          cp "dist/artifacts/$ARTIFACT_NAME" "evidence/$ARTIFACT_NAME"
+          sha256sum "evidence/$ARTIFACT_NAME" | tee evidence/package-sha256.txt
+          mkdir .ci-artifact
+          tar -xJf "evidence/$ARTIFACT_NAME" -C .ci-artifact
+
+      - name: Attest the reviewed package on the default branch
+        id: attestation
+        if: github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: evidence/${{ env.ARTIFACT_NAME }}
+
+      - name: Reconstruct the exact patched source trees
+        id: sources
+        run: |
+          set -o pipefail
+          DOWNLOAD_CACHE_DIR="$PWD/.cache/downloads" \
+            ./scripts/prepare-sources "$PWD/.ci-sources" \
+            2>&1 | tee evidence/source-provenance.log
+          cp .ci-sources/source/go.mod evidence/docker-machine.go.mod
+          cp .ci-sources/source/go.sum evidence/docker-machine.go.sum
+          cp .ci-sources/packet-source/go.mod evidence/packet-driver.go.mod
+          cp .ci-sources/packet-source/go.sum evidence/packet-driver.go.sum
+
+      - name: Verify reachable Go symbols and exact VEX scope
+        id: govulncheck
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          GOBIN="$RUNNER_TEMP/security-bin" \
+            go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          set +e
+          "$RUNNER_TEMP/security-bin/govulncheck" \
+            -json -mode=binary -scan=symbol \
+            .ci-artifact/docker-machine \
+            > evidence/docker-machine-govulncheck.json
+          machine_status=$?
+          "$RUNNER_TEMP/security-bin/govulncheck" \
+            -json -mode=binary -scan=symbol \
+            .ci-artifact/docker-machine-driver-packet \
+            > evidence/packet-driver-govulncheck.json
+          packet_status=$?
+          set -e
+          {
+            printf 'docker_machine_exit=%s\n' "$machine_status"
+            printf 'packet_driver_exit=%s\n' "$packet_status"
+          } > evidence/govulncheck-exit-status.txt
+          python3 scripts/verify-govulncheck.py \
+            --vex security/openvex.json \
+            evidence/docker-machine-govulncheck.json \
+            evidence/packet-driver-govulncheck.json
+
+      - name: Scan the packaging repository for exposed secrets
+        id: secret_scan
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace:ro" \
+            -v "$PWD/evidence:/evidence" \
+            "$TRIVY_IMAGE" fs \
+            --scanners secret \
+            --skip-dirs /workspace/.cache \
+            --skip-dirs /workspace/.ci-artifact \
+            --skip-dirs /workspace/.ci-sources \
+            --skip-dirs /workspace/dist \
+            --skip-dirs /workspace/evidence \
+            --exit-code 1 \
+            --format json \
+            --output /evidence/source-secrets.json \
+            /workspace
+
+      - name: Scan patched source dependencies
+        id: source_scan
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v "$PWD/.ci-sources:/sources:ro" \
+            -v "$PWD/security/openvex.json:/security/openvex.json:ro" \
+            -v "$PWD/evidence:/evidence" \
+            "$TRIVY_IMAGE" fs \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --vex /security/openvex.json \
+            --show-suppressed \
+            --exit-code 1 \
+            --format json \
+            --output /evidence/source-vulnerabilities.json \
+            /sources
+
+      - name: Scan the packaged binaries
+        id: artifact_scan
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v "$PWD/.ci-artifact:/artifact:ro" \
+            -v "$PWD/security/openvex.json:/security/openvex.json:ro" \
+            -v "$PWD/evidence:/evidence" \
+            "$TRIVY_IMAGE" rootfs \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --vex /security/openvex.json \
+            --show-suppressed \
+            --exit-code 1 \
+            --format json \
+            --output /evidence/artifact-vulnerabilities.json \
+            /artifact
+
+      - name: Generate CycloneDX SBOMs
+        id: sbom
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v "$PWD/.ci-sources:/sources:ro" \
+            -v "$PWD/evidence:/evidence" \
+            "$TRIVY_IMAGE" fs \
+            --format cyclonedx \
+            --output /evidence/source.cdx.json \
+            /sources
+          docker run --rm \
+            -v "$PWD/.ci-artifact:/artifact:ro" \
+            -v "$PWD/evidence:/evidence" \
+            "$TRIVY_IMAGE" rootfs \
+            --format cyclonedx \
+            --output /evidence/artifact.cdx.json \
+            /artifact
+
+      - name: Record gate outcomes
+        if: always()
+        run: |
+          {
+            printf 'test=%s\n' '${{ steps.test.outcome }}'
+            printf 'package=%s\n' '${{ steps.package.outcome }}'
+            printf 'attestation=%s\n' '${{ steps.attestation.outcome }}'
+            printf 'sources=%s\n' '${{ steps.sources.outcome }}'
+            printf 'govulncheck=%s\n' '${{ steps.govulncheck.outcome }}'
+            printf 'secret_scan=%s\n' '${{ steps.secret_scan.outcome }}'
+            printf 'source_scan=%s\n' '${{ steps.source_scan.outcome }}'
+            printf 'artifact_scan=%s\n' '${{ steps.artifact_scan.outcome }}'
+            printf 'sbom=%s\n' '${{ steps.sbom.outcome }}'
+          } > evidence/gate-outcomes.txt
+
+      - name: Remove derived source and module caches
+        if: always()
+        run: |
+          rm -rf .ci-artifact .ci-sources .cache dist
+
+      - name: Upload review evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: machine-driver-bundle-security-evidence
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce the release gate
+        if: always()
+        run: |
+          test '${{ steps.test.outcome }}' = success
+          test '${{ steps.package.outcome }}' = success
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            test '${{ steps.attestation.outcome }}' = success
+          fi
+          test '${{ steps.sources.outcome }}' = success
+          test '${{ steps.govulncheck.outcome }}' = success
+          test '${{ steps.secret_scan.outcome }}' = success
+          test '${{ steps.source_scan.outcome }}' = success
+          test '${{ steps.artifact_scan.outcome }}' = success
+          test '${{ steps.sbom.outcome }}' = success

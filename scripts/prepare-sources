@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=../sources.lock.env
+source "$repo_root/sources.lock.env"
+
+if [ "$#" -ne 1 ]; then
+  printf 'usage: %s DESTINATION\n' "$0" >&2
+  exit 2
+fi
+
+destination=$1
+cache_dir="${DOWNLOAD_CACHE_DIR:-$repo_root/.cache/downloads}"
+
+if [ -e "$destination" ]; then
+  printf 'MACHINE_DRIVER_BUNDLE_SOURCE_DESTINATION_EXISTS path=%s\n' "$destination" >&2
+  exit 1
+fi
+
+for command_name in awk chmod curl gpg grep mkdir mktemp mv patch sha256sum tar; do
+  command -v "$command_name" >/dev/null || {
+    printf 'MACHINE_DRIVER_BUNDLE_COMMAND_MISSING command=%s\n' "$command_name" >&2
+    exit 1
+  }
+done
+
+mkdir -p "$cache_dir"
+mkdir "$destination"
+created_destination=1
+workdir=$(mktemp -d "${TMPDIR:-/tmp}/pasturestack-machine-driver-sources.XXXXXX")
+
+cleanup() {
+  rm -rf "$workdir"
+  if [ "${created_destination:-0}" -eq 1 ] && [ "${prepare_complete:-0}" -ne 1 ]; then
+    rm -rf "$destination"
+  fi
+}
+trap cleanup EXIT
+
+download_and_verify() {
+  local name=$1
+  local url=$2
+  local expected_sha256=$3
+  local target="$cache_dir/$name"
+  local temporary="$cache_dir/.${name}.tmp.$$"
+
+  if [ ! -f "$target" ]; then
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+      --connect-timeout 10 --max-time 300 -o "$temporary" "$url"
+    mv "$temporary" "$target"
+  fi
+
+  printf '%s  %s\n' "$expected_sha256" "$target" | sha256sum -c - >/dev/null
+  printf '%s\n' "$target"
+}
+
+validate_tar_archive() {
+  local archive=$1
+  local expected_root=$2
+  local listing="$workdir/archive-listing"
+  local verbose_listing="$workdir/archive-verbose-listing"
+
+  tar -tzf "$archive" >"$listing"
+  awk -v root="$expected_root/" '
+    index($0, root) != 1 || index($0, "/../") != 0 || $0 ~ /\/\.\.$/ { exit 1 }
+  ' "$listing" || {
+    printf 'MACHINE_DRIVER_BUNDLE_ARCHIVE_PATH_REJECTED root=%s\n' "$expected_root" >&2
+    exit 1
+  }
+
+  tar -tvzf "$archive" >"$verbose_listing"
+  if awk 'substr($1, 1, 1) == "l" || substr($1, 1, 1) == "h" { found=1 } END { exit !found }' "$verbose_listing"; then
+    printf 'MACHINE_DRIVER_BUNDLE_ARCHIVE_LINK_REJECTED root=%s\n' "$expected_root" >&2
+    exit 1
+  fi
+}
+
+machine_archive=$(download_and_verify \
+  "docker-machine-${DOCKER_MACHINE_UPSTREAM_TAG}.tar.gz" \
+  "$DOCKER_MACHINE_SOURCE_URL" "$DOCKER_MACHINE_SOURCE_SHA256")
+packet_archive=$(download_and_verify \
+  "packet-driver-${PACKET_DRIVER_UPSTREAM_TAG}.tar.gz" \
+  "$PACKET_DRIVER_SOURCE_URL" "$PACKET_DRIVER_SOURCE_SHA256")
+release_checksums=$(download_and_verify \
+  "docker-machine-${DOCKER_MACHINE_UPSTREAM_TAG}-release.sha256" \
+  "$GITLAB_RELEASE_CHECKSUM_URL" "$GITLAB_RELEASE_CHECKSUM_SHA256")
+release_signature=$(download_and_verify \
+  "docker-machine-${DOCKER_MACHINE_UPSTREAM_TAG}-release.sha256.asc" \
+  "$GITLAB_RELEASE_SIGNATURE_URL" "$GITLAB_RELEASE_SIGNATURE_SHA256")
+release_key=$(download_and_verify \
+  "gitlab-runner-release-signing-key.gpg" \
+  "$GITLAB_RELEASE_KEY_URL" "$GITLAB_RELEASE_KEY_SHA256")
+
+gpg_home="$workdir/gnupg"
+mkdir "$gpg_home"
+chmod 0700 "$gpg_home"
+GNUPGHOME="$gpg_home" gpg --batch --import "$release_key" >/dev/null 2>&1
+actual_fingerprint=$(GNUPGHOME="$gpg_home" gpg --batch --with-colons \
+  --fingerprint --list-keys | awk -F: '$1 == "fpr" { print $10; exit }')
+if [ "$actual_fingerprint" != "$GITLAB_RELEASE_KEY_FINGERPRINT" ]; then
+  printf 'MACHINE_DRIVER_BUNDLE_SIGNING_KEY_MISMATCH actual=%s expected=%s\n' \
+    "$actual_fingerprint" "$GITLAB_RELEASE_KEY_FINGERPRINT" >&2
+  exit 1
+fi
+
+gpg_status=$(GNUPGHOME="$gpg_home" gpg --batch --status-fd=1 \
+  --verify "$release_signature" "$release_checksums" 2>/dev/null)
+printf '%s\n' "$gpg_status" | grep -F \
+  "[GNUPG:] VALIDSIG $GITLAB_RELEASE_KEY_FINGERPRINT " >/dev/null
+
+signed_binary_count=$(awk \
+  -v hash="$GITLAB_OFFICIAL_LINUX_AMD64_SHA256" \
+  '$1 == hash && $2 == "docker-machine-Linux-x86_64" { count++ } END { print count+0 }' \
+  "$release_checksums")
+if [ "$signed_binary_count" -ne 1 ]; then
+  printf 'MACHINE_DRIVER_BUNDLE_SIGNED_RELEASE_MANIFEST_MISMATCH count=%s\n' \
+    "$signed_binary_count" >&2
+  exit 1
+fi
+
+validate_tar_archive "$machine_archive" "$DOCKER_MACHINE_SOURCE_ROOT"
+validate_tar_archive "$packet_archive" "$PACKET_DRIVER_SOURCE_ROOT"
+
+mkdir "$destination/source" "$destination/packet-source"
+tar -xzf "$machine_archive" -C "$destination/source" --strip-components=1 \
+  --no-same-owner --no-same-permissions
+tar -xzf "$packet_archive" -C "$destination/packet-source" --strip-components=1 \
+  --no-same-owner --no-same-permissions
+
+patch --batch --forward --fuzz=0 --reject-file=- \
+  -d "$destination/source" -p1 <"$repo_root/patches/docker-machine-go-security.patch"
+patch --batch --forward --fuzz=0 --reject-file=- \
+  -d "$destination/packet-source" -p1 <"$repo_root/patches/packet-driver-go-security.patch"
+
+printf '%s  %s\n' "$DOCKER_MACHINE_LICENSE_SHA256" \
+  "$destination/source/LICENSE" | sha256sum -c - >/dev/null
+printf '%s  %s\n' "$DOCKER_MACHINE_PATCHED_GO_MOD_SHA256" \
+  "$destination/source/go.mod" | sha256sum -c - >/dev/null
+printf '%s  %s\n' "$DOCKER_MACHINE_PATCHED_GO_SUM_SHA256" \
+  "$destination/source/go.sum" | sha256sum -c - >/dev/null
+printf '%s  %s\n' "$PACKET_DRIVER_LICENSE_SHA256" \
+  "$destination/packet-source/LICENSE" | sha256sum -c - >/dev/null
+printf '%s  %s\n' "$PACKET_DRIVER_PATCHED_GO_MOD_SHA256" \
+  "$destination/packet-source/go.mod" | sha256sum -c - >/dev/null
+printf '%s  %s\n' "$PACKET_DRIVER_PATCHED_GO_SUM_SHA256" \
+  "$destination/packet-source/go.sum" | sha256sum -c - >/dev/null
+
+grep -F "Version = \"0.16.2-gitlab.51\"" \
+  "$destination/source/version/version.go" >/dev/null
+grep -F 'replace github.com/docker/machine => ../source' \
+  "$destination/packet-source/go.mod" >/dev/null
+grep -F 'driverName=packet' "$destination/packet-source/.goreleaser.yml" >/dev/null
+
+prepare_complete=1
+printf 'MACHINE_DRIVER_BUNDLE_SOURCES_OK candidate=%s go=%s signed_release=1 machine_commit=%s packet_commit=%s\n' \
+  "$BUNDLE_VERSION" "$GO_VERSION" "$DOCKER_MACHINE_UPSTREAM_COMMIT" \
+  "$PACKET_DRIVER_UPSTREAM_COMMIT"

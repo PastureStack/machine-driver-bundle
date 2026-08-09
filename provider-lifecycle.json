@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "bundleVersion": "0.16.4",
+  "machineTool": {
+    "sourceTag": "v0.16.2-gitlab.51",
+    "sourceCommit": "7e13feeb34e436fbb895cb03fb5386185b68b720",
+    "maintenanceClass": "compatibility-bridge",
+    "upstreamRemovalTarget": "2027-05"
+  },
+  "providers": {
+    "packet": {
+      "sourceVersion": "0.6.0",
+      "sourceCommit": "1579a8271d52e00760e38dd153d3935abc302915",
+      "status": "retired",
+      "serviceEndDate": "2026-06-30",
+      "newInstallDefault": false,
+      "existingConfigurationPolicy": "preserve-for-rollback",
+      "binaryCompatibilityName": "docker-machine-driver-packet",
+      "downstreamEnforcement": "pending"
+    }
+  }
+}

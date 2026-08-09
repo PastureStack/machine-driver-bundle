@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=../sources.lock.env
+source "$repo_root/sources.lock.env"
+
+if [ "$#" -ne 2 ]; then
+  printf 'usage: %s SOURCE_ROOT OUTPUT_DIRECTORY\n' "$0" >&2
+  exit 2
+fi
+
+source_root=$1
+output_dir=$2
+machine_source="$source_root/source"
+packet_source="$source_root/packet-source"
+
+for command_name in chmod file go grep mkdir sha256sum; do
+  command -v "$command_name" >/dev/null || {
+    printf 'MACHINE_DRIVER_BUNDLE_COMMAND_MISSING command=%s\n' "$command_name" >&2
+    exit 1
+  }
+done
+
+actual_go_version=$(go env GOVERSION)
+if [ "$actual_go_version" != "go$GO_VERSION" ]; then
+  printf 'MACHINE_DRIVER_BUNDLE_GO_VERSION_MISMATCH actual=%s expected=go%s\n' \
+    "$actual_go_version" "$GO_VERSION" >&2
+  exit 1
+fi
+
+go_parallelism="${GO_PARALLELISM:-4}"
+printf '%s\n' "$go_parallelism" | grep -Eq '^[1-8]$'
+mkdir -p "$output_dir"
+machine_binary="$output_dir/docker-machine"
+packet_binary="$output_dir/docker-machine-driver-packet"
+
+export GOTOOLCHAIN=local
+export GOMAXPROCS="${GOMAXPROCS:-$go_parallelism}"
+export GOFLAGS="-mod=readonly -p=$go_parallelism"
+
+(
+  cd "$machine_source"
+  go mod download
+  go mod verify
+  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -trimpath -buildvcs=false -tags 'static_build netgo' \
+    -ldflags "-w -buildid= -X github.com/docker/machine/version.Version=$BUNDLE_VERSION -X github.com/docker/machine/version.GitCommit=${DOCKER_MACHINE_UPSTREAM_COMMIT:0:8}" \
+    -o "$machine_binary" ./cmd/docker-machine
+)
+
+(
+  cd "$packet_source"
+  go mod download
+  go mod verify
+  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -trimpath -buildvcs=false -tags netgo \
+    -ldflags "-w -buildid= -X github.com/equinix/docker-machine-driver-metal/pkg/drivers/metal.version=$BUNDLE_VERSION -X github.com/equinix/docker-machine-driver-metal/pkg/drivers/metal.driverName=packet" \
+    -o "$packet_binary" ./
+)
+
+chmod 0755 "$machine_binary" "$packet_binary"
+printf '%s  %s\n' "$DOCKER_MACHINE_BINARY_SHA256" "$machine_binary" | sha256sum -c - >/dev/null
+printf '%s  %s\n' "$PACKET_DRIVER_BINARY_SHA256" "$packet_binary" | sha256sum -c - >/dev/null
+
+file "$machine_binary" | grep -F 'ELF 64-bit LSB executable' >/dev/null
+file "$machine_binary" | grep -F 'x86-64' >/dev/null
+file "$machine_binary" | grep -F 'statically linked' >/dev/null
+file "$packet_binary" | grep -F 'ELF 64-bit LSB executable' >/dev/null
+file "$packet_binary" | grep -F 'x86-64' >/dev/null
+file "$packet_binary" | grep -F 'statically linked' >/dev/null
+
+"$machine_binary" version | grep -Fx \
+  "docker-machine version $BUNDLE_VERSION, build ${DOCKER_MACHINE_UPSTREAM_COMMIT:0:8}" >/dev/null
+
+if grep -aF "$source_root" "$machine_binary" "$packet_binary" >/dev/null; then
+  printf 'MACHINE_DRIVER_BUNDLE_LOCAL_PATH_LEAK path=%s\n' "$source_root" >&2
+  exit 1
+fi
+
+printf 'MACHINE_DRIVER_BUNDLE_BUILD_OK version=%s go=%s machine_sha256=%s packet_sha256=%s\n' \
+  "$BUNDLE_VERSION" "$GO_VERSION" "$DOCKER_MACHINE_BINARY_SHA256" \
+  "$PACKET_DRIVER_BINARY_SHA256"

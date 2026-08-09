@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=../sources.lock.env
+source "$repo_root/sources.lock.env"
+
+for command_name in grep python3; do
+  command -v "$command_name" >/dev/null || {
+    printf 'MACHINE_DRIVER_BUNDLE_COMMAND_MISSING command=%s\n' "$command_name" >&2
+    exit 1
+  }
+done
+
+printf '%s\n' "$BUNDLE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+printf '%s\n' "$GO_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+[ "$TARGET_PLATFORM" = linux-amd64 ]
+[ "$PACKET_DRIVER_STATUS" = retired-compatibility-only ]
+[ "$PACKET_DRIVER_NEW_INSTALL_DEFAULT" = false ]
+
+python3 "$repo_root/scripts/verify-govulncheck.py" \
+  --vex "$repo_root/security/openvex.json" --validate-vex-only
+
+python3 - "$repo_root/provider-lifecycle.json" "$BUNDLE_VERSION" <<'PY'
+import json
+import sys
+
+path, expected_version = sys.argv[1:]
+with open(path, encoding="utf-8") as stream:
+    data = json.load(stream)
+
+assert data["schemaVersion"] == 1
+assert data["bundleVersion"] == expected_version
+packet = data["providers"]["packet"]
+assert packet["status"] == "retired"
+assert packet["newInstallDefault"] is False
+assert packet["existingConfigurationPolicy"] == "preserve-for-rollback"
+assert packet["downstreamEnforcement"] == "pending"
+PY
+
+python3 - "$repo_root/patches/docker-machine-go-security.patch" \
+  "$repo_root/patches/packet-driver-go-security.patch" <<'PY'
+import re
+import sys
+
+for path in sys.argv[1:]:
+    text = open(path, encoding="utf-8").read()
+    files = re.findall(r"^diff --git a/(\S+) b/(\S+)$", text, re.MULTILINE)
+    assert files, path
+    assert all(left in {"go.mod", "go.sum"} and right == left for left, right in files), path
+PY
+
+python3 - "$repo_root/scripts/collect-licenses.py" <<'PY'
+import ast
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+has_output_option = False
+has_os_replace = False
+for node in ast.walk(tree):
+    if not isinstance(node, ast.Call):
+        continue
+    function = node.func
+    if (
+        isinstance(function, ast.Attribute)
+        and function.attr == "add_argument"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and node.args[0].value == "--output"
+    ):
+        has_output_option = True
+    if (
+        isinstance(function, ast.Attribute)
+        and function.attr == "replace"
+        and isinstance(function.value, ast.Name)
+        and function.value.id == "os"
+    ):
+        has_os_replace = True
+
+if has_output_option or has_os_replace:
+    raise SystemExit("arbitrary license output path capability is forbidden")
+PY
+
+printf 'MACHINE_DRIVER_BUNDLE_VALIDATE_OK version=%s pure_numeric=1 packet_new_install_default=0 vex_exact=1 license_output_path=stdout-only\n' \
+  "$BUNDLE_VERSION"

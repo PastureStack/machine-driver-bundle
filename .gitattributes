@@ -1,0 +1,10 @@
+* text=auto eol=lf
+*.sh text eol=lf
+Makefile text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+*.py text eol=lf
+*.txt text eol=lf
+*.env text eol=lf
+scripts/* text eol=lf

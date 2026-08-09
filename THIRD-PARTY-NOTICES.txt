@@ -1,0 +1,26 @@
+Machine Driver Bundle contains code rebuilt from these upstream projects:
+
+1. Go standard library 1.26.6
+   License: BSD 3-Clause License
+   Source: https://go.dev/
+
+2. GitLab Docker Machine fork
+   Upstream source tag: v0.16.2-gitlab.51
+   Source commit: 7e13feeb34e436fbb895cb03fb5386185b68b720
+   License: Apache License 2.0
+   Source: https://gitlab.com/gitlab-org/ci-cd/docker-machine
+
+3. Equinix Docker Machine driver for Metal
+   Upstream version: 0.6.0
+   Source commit: 1579a8271d52e00760e38dd153d3935abc302915
+   License: BSD 3-Clause License
+   Source: https://github.com/equinix/docker-machine-driver-metal
+
+The generated archive includes:
+
+- machine-driver-bundle-LICENSES.txt for the Go standard library and both source-project licenses;
+- machine-driver-bundle-DEPENDENCY-LICENSES.txt for every Go module linked into either executable;
+- machine-driver-bundle-SOURCES.txt for exact immutable source and checksum coordinates;
+- machine-driver-bundle-SECURITY-VEX.json for the reviewed not-affected boundary.
+
+The former rancher/machine-package repository is cited only as historical provenance for the observable compatibility contract. No source or binary from that unlicensed packaging repository is included.
