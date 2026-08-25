@@ -56,13 +56,62 @@ index 0b632d3f2ba9cb03c42d29c87b9f8a19b1ef1825..4c2cc3f908f939bae4fc3cf8eaa76681
 +++ b/commands/create.go
 @@ -14,7 +14,7 @@ import (
  
- 	"time"
+	"time"
  
 -	"github.com/codegangsta/cli"
 +	"github.com/urfave/cli"
- 	"github.com/docker/machine/commands/mcndirs"
- 	"github.com/docker/machine/libmachine"
- 	"github.com/docker/machine/libmachine/auth"
+	"github.com/docker/machine/commands/mcndirs"
+	"github.com/docker/machine/libmachine"
+	"github.com/docker/machine/libmachine/auth"
+@@ -374,7 +374,11 @@ func getDriverOpts(c CommandLine, mcnflags []mcnflag.Flag) drivers.DriverOptions {
+ 	for _, name := range c.FlagNames() {
+ 		getter, ok := c.Generic(name).(flag.Getter)
+ 		if ok {
+-			driverOpts.Values[name] = getter.Get()
++			value := getter.Get()
++			if values, ok := value.(cli.StringSlice); ok {
++				value = []string(values)
++			}
++			driverOpts.Values[name] = value
+ 		} else {
+ 			// TODO: This is pretty hacky.  StringSlice is the only
+ 			// type so far we have to worry about which is not a
+diff --git a/commands/create_urfave_test.go b/commands/create_urfave_test.go
+new file mode 100644
+index 0000000..c5d3a42
+--- /dev/null
++++ b/commands/create_urfave_test.go
+@@ -0,0 +1,30 @@
++package commands
++
++import (
++	"bytes"
++	"encoding/gob"
++	"testing"
++
++	"github.com/docker/machine/commands/commandstest"
++	"github.com/urfave/cli"
++)
++
++func TestGetDriverOptsNormalizesUrfaveStringSlice(t *testing.T) {
++	values := cli.StringSlice{"ford"}
++	commandLine := &commandstest.FakeCommandLine{
++		LocalFlags: &commandstest.FakeFlagger{
++			Data: map[string]interface{}{
++				"stringslice": &values,
++			},
++		},
++	}
++	driverOpts := getDriverOpts(commandLine, getDriverOptsFlags)
++	actual := driverOpts.StringSlice("stringslice")
++	if len(actual) != 1 || actual[0] != "ford" {
++		t.Fatalf("unexpected normalized string slice: %#v", actual)
++	}
++	var encoded bytes.Buffer
++	if err := gob.NewEncoder(&encoded).Encode(driverOpts); err != nil {
++		t.Fatalf("normalized driver options are not gob encodable: %v", err)
++	}
++}
 diff --git a/commands/flag_sort.go b/commands/flag_sort.go
 index 746043b5634d02afefc6f65957f85f95e2b7a278..f12035a17aad4153ad7dd92f0c3f6cc4e3fc86fc 100644
 --- a/commands/flag_sort.go
