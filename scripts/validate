@@ -35,7 +35,7 @@ packet = data["providers"]["packet"]
 assert packet["status"] == "retired"
 assert packet["newInstallDefault"] is False
 assert packet["existingConfigurationPolicy"] == "preserve-for-rollback"
-assert packet["downstreamEnforcement"] == "pending"
+assert packet["downstreamEnforcement"] == "host-provisioner-rejects-create-and-web-console-hides-new-install"
 PY
 
 python3 - "$repo_root/patches/docker-machine-go-security.patch" \
@@ -43,11 +43,36 @@ python3 - "$repo_root/patches/docker-machine-go-security.patch" \
 import re
 import sys
 
-for path in sys.argv[1:]:
-    text = open(path, encoding="utf-8").read()
-    files = re.findall(r"^diff --git a/(\S+) b/(\S+)$", text, re.MULTILINE)
-    assert files, path
-    assert all(left in {"go.mod", "go.sum"} and right == left for left, right in files), path
+machine_patch, packet_patch = sys.argv[1:]
+
+text = open(machine_patch, encoding="utf-8").read()
+files = re.findall(r"^diff --git a/(\S+) b/(\S+)$", text, re.MULTILINE)
+assert files, machine_patch
+machine_exact = {
+    "cmd/docker-machine/machine.go",
+    "drivers/exoscale/exoscale.go",
+    "drivers/virtualbox/vtx_intel.go",
+    "drivers/vmwarevsphere/vsphere.go",
+    "go.mod",
+    "go.sum",
+    "libmachine/provision/configure_swarm.go",
+}
+machine_prefixes = (
+    "commands/",
+    "drivers/amazonec2/",
+    "drivers/azure/",
+    "libmachine/mcndockerclient/",
+)
+assert all(left == right for left, right in files), machine_patch
+assert all(
+    left in machine_exact or left.startswith(machine_prefixes)
+    for left, _ in files
+), machine_patch
+
+text = open(packet_patch, encoding="utf-8").read()
+files = re.findall(r"^diff --git a/(\S+) b/(\S+)$", text, re.MULTILINE)
+assert files, packet_patch
+assert all(left in {"go.mod", "go.sum"} and right == left for left, right in files), packet_patch
 PY
 
 python3 - "$repo_root/scripts/collect-licenses.py" <<'PY'

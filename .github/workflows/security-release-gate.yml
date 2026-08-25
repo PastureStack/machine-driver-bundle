@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 90
     env:
       SOURCE_DATE_EPOCH: "0"
-      TRIVY_IMAGE: aquasec/trivy:0.73.0@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c
+      TRIVY_IMAGE: aquasec/trivy:0.74.0@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9
       ARTIFACT_NAME: machine-driver-bundle-0.16.4-linux-amd64.tar.xz
 
     steps:
@@ -25,7 +25,7 @@ jobs:
       - name: Install the exact Go toolchain
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: 1.26.6
+          go-version: 1.27.0
           check-latest: false
           cache: false
 
@@ -79,16 +79,16 @@ jobs:
         run: |
           set -euo pipefail
           GOBIN="$RUNNER_TEMP/security-bin" \
-            go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+            go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           set +e
-          "$RUNNER_TEMP/security-bin/govulncheck" \
-            -json -mode=binary -scan=symbol \
-            .ci-artifact/docker-machine \
+          (cd .ci-sources/source && \
+            "$RUNNER_TEMP/security-bin/govulncheck" \
+              -json -scan=symbol ./...) \
             > evidence/docker-machine-govulncheck.json
           machine_status=$?
-          "$RUNNER_TEMP/security-bin/govulncheck" \
-            -json -mode=binary -scan=symbol \
-            .ci-artifact/docker-machine-driver-packet \
+          (cd .ci-sources/packet-source && \
+            "$RUNNER_TEMP/security-bin/govulncheck" \
+              -json -scan=symbol ./...) \
             > evidence/packet-driver-govulncheck.json
           packet_status=$?
           set -e

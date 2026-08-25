@@ -9,37 +9,14 @@ from pathlib import Path
 from typing import Any
 
 
-DOCKER_PURL = "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"
-AWS_PURL = "pkg:golang/github.com/aws/aws-sdk-go@v1.55.8"
-CRYPTO_PURL = "pkg:golang/golang.org/x/crypto@v0.54.0"
+CRYPTO_PURL = "pkg:golang/golang.org/x/crypto@v0.55.0"
 
 EXPECTED_VEX = {
-    ("CVE-2020-8911", AWS_PURL),
-    ("CVE-2020-8912", AWS_PURL),
-    ("CVE-2026-33997", DOCKER_PURL),
-    ("CVE-2026-34040", DOCKER_PURL),
-    ("CVE-2026-41567", DOCKER_PURL),
-    ("CVE-2026-41568", DOCKER_PURL),
-    ("CVE-2026-42306", DOCKER_PURL),
     ("GO-2026-5932", CRYPTO_PURL),
 }
 
-MACHINE_REACHABLE = {
-    "GO-2026-4883",
-    "GO-2026-4887",
-}
-MACHINE_MODULE_ONLY = {
-    ("GO-2022-0635", "github.com/aws/aws-sdk-go", "v1.55.8"),
-    ("GO-2022-0646", "github.com/aws/aws-sdk-go", "v1.55.8"),
-    ("GO-2026-4883", "github.com/docker/docker", "v28.5.2+incompatible"),
-    ("GO-2026-4887", "github.com/docker/docker", "v28.5.2+incompatible"),
-    ("GO-2026-5617", "github.com/docker/docker", "v28.5.2+incompatible"),
-    ("GO-2026-5668", "github.com/docker/docker", "v28.5.2+incompatible"),
-    ("GO-2026-5746", "github.com/docker/docker", "v28.5.2+incompatible"),
-    ("GO-2026-5932", "golang.org/x/crypto", "v0.54.0"),
-}
-PACKET_MODULE_ONLY = {
-    ("GO-2026-5932", "golang.org/x/crypto", "v0.54.0"),
+EXPECTED_MODULE_ONLY = {
+    ("GO-2026-5932", "golang.org/x/crypto", "v0.55.0"),
 }
 
 
@@ -80,13 +57,13 @@ def analyze_scan(path: Path) -> tuple[set[str], set[tuple[str, str, str]], dict[
     assert len(configs) == 1
     config = configs[0]
     assert config["scanner_name"] == "govulncheck"
-    assert config["scanner_version"] == "v1.6.0"
+    assert config["scanner_version"] == "v1.7.0"
     assert config["scan_level"] == "symbol"
-    assert config["scan_mode"] == "binary"
+    assert config["scan_mode"] == "source"
 
     sboms = [message["SBOM"] for message in messages if "SBOM" in message]
     assert len(sboms) == 1
-    assert sboms[0]["go_version"] == "go1.26.6"
+    assert sboms[0]["go_version"] == "go1.27.0"
 
     reachable: set[str] = set()
     module_only: set[tuple[str, str, str]] = set()
@@ -111,22 +88,16 @@ def analyze_scan(path: Path) -> tuple[set[str], set[tuple[str, str, str]], dict[
 
 def validate_machine(path: Path) -> None:
     reachable, module_only, packages = analyze_scan(path)
-    assert reachable == MACHINE_REACHABLE, (reachable, MACHINE_REACHABLE)
-    assert module_only == MACHINE_MODULE_ONLY, (module_only, MACHINE_MODULE_ONLY)
-    for osv in MACHINE_REACHABLE:
-        assert packages[osv]
-        assert all(
-            package == "github.com/docker/docker/client"
-            or package.startswith("github.com/docker/docker/api")
-            for package in packages[osv]
-        ), (osv, packages[osv])
+    assert not reachable, reachable
+    assert not packages, packages
+    assert module_only == EXPECTED_MODULE_ONLY, (module_only, EXPECTED_MODULE_ONLY)
 
 
 def validate_packet(path: Path) -> None:
     reachable, module_only, packages = analyze_scan(path)
     assert not reachable, reachable
     assert not packages, packages
-    assert module_only == PACKET_MODULE_ONLY, (module_only, PACKET_MODULE_ONLY)
+    assert module_only == EXPECTED_MODULE_ONLY, (module_only, EXPECTED_MODULE_ONLY)
 
 
 def main() -> None:
@@ -140,7 +111,7 @@ def main() -> None:
     validate_vex(args.vex)
     if args.validate_vex_only:
         assert args.machine_scan is None and args.packet_scan is None
-        print("MACHINE_DRIVER_BUNDLE_VEX_OK statements=8")
+        print("MACHINE_DRIVER_BUNDLE_VEX_OK statements=1")
         return
 
     assert args.machine_scan is not None and args.packet_scan is not None
@@ -148,7 +119,7 @@ def main() -> None:
     validate_packet(args.packet_scan)
     print(
         "MACHINE_DRIVER_BUNDLE_GOVULNCHECK_OK "
-        "machine_reviewed_reachable=2 packet_reachable=0 vex_statements=8"
+        "machine_reachable=0 packet_reachable=0 module_only=GO-2026-5932 vex_statements=1"
     )
 
 

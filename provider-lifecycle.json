@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "bundleVersion": "0.16.4",
   "machineTool": {
-    "sourceTag": "v0.16.2-gitlab.51",
-    "sourceCommit": "7e13feeb34e436fbb895cb03fb5386185b68b720",
+    "sourceTag": "v0.16.2-gitlab.52",
+    "sourceCommit": "95d190cbe55757b4212b69d0a278151d1faaaf66",
     "maintenanceClass": "compatibility-bridge",
     "upstreamRemovalTarget": "2027-05"
   },
@@ -16,7 +16,7 @@
       "newInstallDefault": false,
       "existingConfigurationPolicy": "preserve-for-rollback",
       "binaryCompatibilityName": "docker-machine-driver-packet",
-      "downstreamEnforcement": "pending"
+      "downstreamEnforcement": "host-provisioner-rejects-create-and-web-console-hides-new-install"
     }
   }
 }

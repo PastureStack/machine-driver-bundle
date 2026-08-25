@@ -1,12 +1,12 @@
 Machine Driver Bundle contains code rebuilt from these upstream projects:
 
-1. Go standard library 1.26.6
+1. Go standard library 1.27.0
    License: BSD 3-Clause License
    Source: https://go.dev/
 
 2. GitLab Docker Machine fork
-   Upstream source tag: v0.16.2-gitlab.51
-   Source commit: 7e13feeb34e436fbb895cb03fb5386185b68b720
+   Upstream source tag: v0.16.2-gitlab.52
+   Source commit: 95d190cbe55757b4212b69d0a278151d1faaaf66
    License: Apache License 2.0
    Source: https://gitlab.com/gitlab-org/ci-cd/docker-machine
 

@@ -43,12 +43,20 @@ packet_source="$workdir/sources/packet-source"
   export GOFLAGS="-mod=readonly -p=$go_parallelism"
   go mod verify
 
-  docker_dependencies=$(go list -deps ./cmd/docker-machine | \
+  legacy_docker_dependencies=$(go list -deps ./cmd/docker-machine | \
     grep '^github.com/docker/docker' || true)
-  disallowed_dependencies=$(printf '%s\n' "$docker_dependencies" | \
-    grep -Ev '^github.com/docker/docker/(api($|/)|client$)' || true)
+  if [ -n "$legacy_docker_dependencies" ]; then
+    printf 'MACHINE_DRIVER_BUNDLE_LEGACY_DOCKER_MODULE_PRESENT\n%s\n' \
+      "$legacy_docker_dependencies" >&2
+    exit 1
+  fi
+
+  moby_dependencies=$(go list -deps ./cmd/docker-machine | \
+    grep '^github.com/moby/moby/' || true)
+  disallowed_dependencies=$(printf '%s\n' "$moby_dependencies" | \
+    grep -Ev '^github.com/moby/moby/(api($|/)|client($|/))' || true)
   if [ -n "$disallowed_dependencies" ]; then
-    printf 'MACHINE_DRIVER_BUNDLE_DOCKER_SERVER_CODE_PRESENT\n%s\n' \
+    printf 'MACHINE_DRIVER_BUNDLE_MOBY_SERVER_CODE_PRESENT\n%s\n' \
       "$disallowed_dependencies" >&2
     exit 1
   fi
