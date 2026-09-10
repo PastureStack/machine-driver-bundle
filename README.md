@@ -2,7 +2,11 @@
 
 PastureStack is an independent community effort to preserve, audit, and modernize the Rancher 1.6 ecosystem. It is not affiliated with or endorsed by Rancher Labs or SUSE.
 
-This repository builds the Linux AMD64 machine-management bundle consumed by the PastureStack compatibility server. The current bundle version is `0.16.4`; the generated archive and both rebuilt executables use that numeric version without a product or maintenance suffix.
+This repository builds the Linux AMD64 machine-management bundle consumed by
+the PastureStack compatibility server. The current public GitHub Release is
+[`v0.16.4`](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.4),
+and the generated archive and both rebuilt executables use numeric version
+`0.16.4` without a product or maintenance suffix.
 
 ## Reviewed inputs
 
