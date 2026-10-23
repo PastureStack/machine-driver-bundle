@@ -63,7 +63,7 @@ def analyze_scan(path: Path) -> tuple[set[str], set[tuple[str, str, str]], dict[
 
     sboms = [message["SBOM"] for message in messages if "SBOM" in message]
     assert len(sboms) == 1
-    assert sboms[0]["go_version"] == "go1.27.0"
+    assert sboms[0]["go_version"] == "go1.27.3"
 
     reachable: set[str] = set()
     module_only: set[tuple[str, str, str]] = set()

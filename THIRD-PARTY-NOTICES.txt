@@ -1,6 +1,6 @@
 Machine Driver Bundle contains code rebuilt from these upstream projects:
 
-1. Go standard library 1.27.0
+1. Go standard library 1.27.3
    License: BSD 3-Clause License
    Source: https://go.dev/
 

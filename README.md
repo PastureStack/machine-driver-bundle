@@ -12,7 +12,7 @@ and the generated archive and both rebuilt executables use numeric version
 
 - Docker Machine is rebuilt from GitLab's maintained fork at upstream source tag `v0.16.2-gitlab.52`, commit `95d190cbe55757b4212b69d0a278151d1faaaf66`. That external tag is recorded only as an immutable source coordinate.
 - The compatibility provider is rebuilt from Equinix's final release `0.6.0`, commit `1579a8271d52e00760e38dd153d3935abc302915`, with the protocol-compatible binary name `docker-machine-driver-packet`.
-- Both binaries are built with Go `1.27.0`. The zero-fuzz source patch migrates the linked cloud clients to maintained SDKs, including AWS SDK v2 and Azure Track 2 with managed disks; resulting `go.mod` and `go.sum` hashes are locked.
+- Both binaries are built with Go `1.27.3`. The zero-fuzz source patch migrates the linked cloud clients to maintained SDKs, including AWS SDK v2 and Azure Track 2 with managed disks; resulting `go.mod` and `go.sum` hashes are locked.
 
 The official GitLab checksum manifest is verified with its release signature and the exact GitLab signing-key fingerprint before any source is built. Source archives, licenses, patched module files, and output binaries are independently SHA-256 pinned.
 

@@ -60,6 +60,7 @@ export GOFLAGS="-mod=readonly -p=$go_parallelism"
 )
 
 chmod 0755 "$machine_binary" "$packet_binary"
+sha256sum "$machine_binary" "$packet_binary"
 printf '%s  %s\n' "$DOCKER_MACHINE_BINARY_SHA256" "$machine_binary" | sha256sum -c - >/dev/null
 printf '%s  %s\n' "$PACKET_DRIVER_BINARY_SHA256" "$packet_binary" | sha256sum -c - >/dev/null
 
