@@ -135,6 +135,8 @@ patch --batch --forward --fuzz=0 --reject-file=- \
 patch --batch --forward --fuzz=0 --reject-file=- \
   -d "$destination/source" -p1 <"$repo_root/patches/docker-machine-http2.patch"
 patch --batch --forward --fuzz=0 --reject-file=- \
+  -d "$destination/source" -p1 <"$repo_root/patches/docker-machine-grpc-security.patch"
+patch --batch --forward --fuzz=0 --reject-file=- \
   -d "$destination/packet-source" -p1 <"$repo_root/patches/packet-driver-http2.patch"
 
 printf '%s  %s\n' "$DOCKER_MACHINE_LICENSE_SHA256" \
