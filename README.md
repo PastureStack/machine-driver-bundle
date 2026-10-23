@@ -51,3 +51,13 @@ Artifacts built directly from a checkout are review candidates. A GitHub Release
 The source patches select `golang.org/x/net v0.60.0` and its required x/crypto, x/sys, x/term, and x/text updates. The patched module manifests and sums remain checksum-locked; CI rebuilds and checks the exact binaries before release.
 
 Maintained Go builds select the patched Go 1.27.3 compiler without raising the existing Go language requirement. Python tooling uses the patched pip/CA path; CI interpreter pins remain on the Python 3.14 series. Release artifacts must pass the repository's existing checks before publication.
+
+## Full-severity release policy
+
+Release verification retains the complete runtime vulnerability report. Every
+finding with an official fix blocks release, regardless of severity. Unknown
+findings block unless a separately reviewed, exact not-affected statement is
+proved by the actual product dependency graph. LOW/MEDIUM findings without an
+official fix require the repository's exact CVE/package/version/PURL review ledger;
+new or changed findings fail closed. This policy-only update does not replace any
+already published immutable artifact.

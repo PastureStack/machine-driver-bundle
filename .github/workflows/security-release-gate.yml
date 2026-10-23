@@ -144,11 +144,16 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD/.ci-artifact:/artifact:ro" \
+            -v "$PWD/evidence:/evidence" \
+            "$TRIVY_IMAGE" rootfs --scanners vuln --list-all-pkgs \
+            --format json --output /evidence/artifact-vulnerabilities-raw.json /artifact
+          docker run --rm \
+            -v "$PWD/.ci-artifact:/artifact:ro" \
             -v "$PWD/security/openvex.json:/security/openvex.json:ro" \
             -v "$PWD/evidence:/evidence" \
             "$TRIVY_IMAGE" rootfs \
             --scanners vuln \
-            --severity HIGH,CRITICAL \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
             --vex /security/openvex.json \
             --show-suppressed \
             --exit-code 1 \
