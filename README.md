@@ -4,15 +4,15 @@ PastureStack is an independent community effort to preserve, audit, and moderniz
 
 This repository builds the Linux AMD64 machine-management bundle consumed by
 the PastureStack compatibility server. The current public GitHub Release is
-[`v0.16.4`](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.4),
+[`v0.16.5`](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.5),
 and the generated archive and both rebuilt executables use numeric version
-`0.16.4` without a product or maintenance suffix.
+`0.16.5` without a product or maintenance suffix.
 
 ## Reviewed inputs
 
 - Docker Machine is rebuilt from GitLab's maintained fork at upstream source tag `v0.16.2-gitlab.52`, commit `95d190cbe55757b4212b69d0a278151d1faaaf66`. That external tag is recorded only as an immutable source coordinate.
 - The compatibility provider is rebuilt from Equinix's final release `0.6.0`, commit `1579a8271d52e00760e38dd153d3935abc302915`, with the protocol-compatible binary name `docker-machine-driver-packet`.
-- Both binaries are built with Go `1.27.0`. The zero-fuzz source patch migrates the linked cloud clients to maintained SDKs, including AWS SDK v2 and Azure Track 2 with managed disks; resulting `go.mod` and `go.sum` hashes are locked.
+- Both binaries are built with Go `1.27.3`. The zero-fuzz source patch migrates the linked cloud clients to maintained SDKs, including AWS SDK v2 and Azure Track 2 with managed disks; resulting `go.mod` and `go.sum` hashes are locked.
 
 The official GitLab checksum manifest is verified with its release signature and the exact GitLab signing-key fingerprint before any source is built. Source archives, licenses, patched module files, and output binaries are independently SHA-256 pinned.
 
@@ -41,7 +41,13 @@ make test
 Output:
 
 ```text
-dist/artifacts/machine-driver-bundle-0.16.4-linux-amd64.tar.xz
+dist/artifacts/machine-driver-bundle-0.16.5-linux-amd64.tar.xz
 ```
 
 Artifacts built directly from a checkout are review candidates. A GitHub Release, when present, is the reviewed distribution and its package is covered by GitHub Artifact Attestation generated from the protected default branch. Catalog changes, container-registry changes, and deployment remain intentionally excluded from this workflow.
+
+## October 2026 security maintenance
+
+The source patches select `golang.org/x/net v0.60.0` and its required x/crypto, x/sys, x/term, and x/text updates. The patched module manifests and sums remain checksum-locked; CI rebuilds and checks the exact binaries before release.
+
+Maintained Go builds select the patched Go 1.27.3 compiler without raising the existing Go language requirement. Python tooling uses the patched pip/CA path; CI interpreter pins remain on the Python 3.14 series. Release artifacts must pass the repository's existing checks before publication.

@@ -16,7 +16,7 @@ jobs:
     env:
       SOURCE_DATE_EPOCH: "0"
       TRIVY_IMAGE: aquasec/trivy:0.74.0@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9
-      ARTIFACT_NAME: machine-driver-bundle-0.16.4-linux-amd64.tar.xz
+      ARTIFACT_NAME: machine-driver-bundle-0.16.5-linux-amd64.tar.xz
 
     steps:
       - name: Check out the reviewed source
@@ -25,14 +25,14 @@ jobs:
       - name: Install the exact Go toolchain
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: 1.27.0
+          go-version: 1.27.3
           check-latest: false
           cache: false
 
       - name: Install the exact Python toolchain
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14.6'
+          python-version: '3.14.9'
           check-latest: false
 
       - name: Prepare evidence directory
