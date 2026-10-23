@@ -4,9 +4,9 @@ PastureStack is an independent community effort to preserve, audit, and moderniz
 
 This repository builds the Linux AMD64 machine-management bundle consumed by
 the PastureStack compatibility server. The current public GitHub Release is
-[`v0.16.4`](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.4),
+[`v0.16.5`](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.5),
 and the generated archive and both rebuilt executables use numeric version
-`0.16.4` without a product or maintenance suffix.
+`0.16.5` without a product or maintenance suffix.
 
 ## Reviewed inputs
 
@@ -41,7 +41,11 @@ make test
 Output:
 
 ```text
-dist/artifacts/machine-driver-bundle-0.16.4-linux-amd64.tar.xz
+dist/artifacts/machine-driver-bundle-0.16.5-linux-amd64.tar.xz
 ```
 
 Artifacts built directly from a checkout are review candidates. A GitHub Release, when present, is the reviewed distribution and its package is covered by GitHub Artifact Attestation generated from the protected default branch. Catalog changes, container-registry changes, and deployment remain intentionally excluded from this workflow.
+
+## October 2026 security maintenance
+
+Maintained Go builds select the patched Go 1.27.3 compiler without raising the existing Go language requirement. Python tooling uses the patched pip/CA path; CI interpreter pins remain on the Python 3.14 series. Release artifacts must pass the repository's existing checks before publication.

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleVersion": "0.16.4",
+  "bundleVersion": "0.16.5",
   "machineTool": {
     "sourceTag": "v0.16.2-gitlab.52",
     "sourceCommit": "95d190cbe55757b4212b69d0a278151d1faaaf66",
