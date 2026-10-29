@@ -73,6 +73,12 @@ text = open(packet_patch, encoding="utf-8").read()
 files = re.findall(r"^diff --git a/(\S+) b/(\S+)$", text, re.MULTILINE)
 assert files, packet_patch
 assert all(left in {"go.mod", "go.sum"} and right == left for left, right in files), packet_patch
+
+for name in ("docker-machine-xnet062.patch", "packet-driver-xnet062.patch"):
+    path = __import__("pathlib").Path(machine_patch).with_name(name)
+    text = path.read_text(encoding="utf-8")
+    files = re.findall(r"^diff --git a/(\S+) b/(\S+)$", text, re.MULTILINE)
+    assert files and all(left in {"go.mod", "go.sum"} and right == left for left, right in files), path
 PY
 
 python3 - "$repo_root/scripts/collect-licenses.py" <<'PY'

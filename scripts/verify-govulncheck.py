@@ -9,14 +9,14 @@ from pathlib import Path
 from typing import Any
 
 
-CRYPTO_PURL = "pkg:golang/golang.org/x/crypto@v0.57.0"
+CRYPTO_PURL = "pkg:golang/golang.org/x/crypto@v0.58.0"
 
 EXPECTED_VEX = {
     ("GO-2026-5932", CRYPTO_PURL),
 }
 
 EXPECTED_MODULE_ONLY = {
-    ("GO-2026-5932", "golang.org/x/crypto", "v0.57.0"),
+    ("GO-2026-5932", "golang.org/x/crypto", "v0.58.0"),
 }
 
 

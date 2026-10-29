@@ -1,13 +1,19 @@
 {
   "@context": "https://openvex.dev/ns/v0.2.0",
-  "@id": "https://github.com/PastureStack/machine-driver-bundle/security/openvex/0.16.5",
+  "@id": "https://github.com/PastureStack/machine-driver-bundle/security/openvex/0.16.6",
   "author": "PastureStack Security",
-  "timestamp": "2026-08-25T08:00:00Z",
-  "version": 1,
+  "timestamp": "2026-10-29T10:37:19.322581+00:00",
+  "version": 2,
   "statements": [
     {
-      "vulnerability": {"name": "GO-2026-5932"},
-      "products": [{"@id": "pkg:golang/golang.org/x/crypto@v0.57.0"}],
+      "vulnerability": {
+        "name": "GO-2026-5932"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/golang.org/x/crypto@v0.58.0"
+        }
+      ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
       "impact_statement": "Source-mode govulncheck reports no reachable package or function, and neither command imports the unmaintained OpenPGP package."
