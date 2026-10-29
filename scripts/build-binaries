@@ -60,6 +60,26 @@ export GOFLAGS="-mod=readonly -p=$go_parallelism"
 )
 
 chmod 0755 "$machine_binary" "$packet_binary"
+if [ "${GITHUB_ACTIONS:-}" = true ] && {
+  [ "$(sha256sum "$machine_binary" | awk '{print $1}')" != "$DOCKER_MACHINE_BINARY_SHA256" ] ||
+  [ "$(sha256sum "$packet_binary" | awk '{print $1}')" != "$PACKET_DRIVER_BINARY_SHA256" ];
+}; then
+  # Preserve qualification bytes; the checksum gates below still reject them.
+  qualification="$repo_root/evidence/hash-qualification"
+  mkdir -p "$qualification"
+  install -m 0755 "$machine_binary" "$qualification/docker-machine"
+  install -m 0755 "$packet_binary" "$qualification/docker-machine-driver-packet"
+  python3 "$repo_root/scripts/collect-licenses.py" \
+    --machine-source "$machine_source" --packet-source "$packet_source" \
+    --machine-binary "$machine_binary" --packet-binary "$packet_binary" \
+    > "$qualification/machine-driver-bundle-DEPENDENCY-LICENSES.txt"
+  cp "$machine_source/go.mod" "$qualification/docker-machine.go.mod"
+  cp "$machine_source/go.sum" "$qualification/docker-machine.go.sum"
+  cp "$packet_source/go.mod" "$qualification/packet-driver.go.mod"
+  cp "$packet_source/go.sum" "$qualification/packet-driver.go.sum"
+  (cd "$qualification" && sha256sum docker-machine docker-machine-driver-packet \
+    machine-driver-bundle-DEPENDENCY-LICENSES.txt > SHA256SUMS)
+fi
 sha256sum "$machine_binary" "$packet_binary"
 printf '%s  %s\n' "$DOCKER_MACHINE_BINARY_SHA256" "$machine_binary" | sha256sum -c - >/dev/null
 printf '%s  %s\n' "$PACKET_DRIVER_BINARY_SHA256" "$packet_binary" | sha256sum -c - >/dev/null

@@ -3,10 +3,10 @@
 PastureStack is an independent community effort to preserve, audit, and modernize the Rancher 1.6 ecosystem. It is not affiliated with or endorsed by Rancher Labs or SUSE.
 
 This repository builds the Linux AMD64 machine-management bundle consumed by
-the PastureStack compatibility server. The current public GitHub Release is
-[`v0.16.5`](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.5),
-and the generated archive and both rebuilt executables use numeric version
-`0.16.5` without a product or maintenance suffix.
+the PastureStack compatibility server. This source selects numeric version
+`0.16.6` for the bundle and both rebuilt executables. Checkout builds are review
+candidates; the matching [GitHub Release](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.6)
+is the immutable distribution after its protected-main release gate completes.
 
 ## Reviewed inputs
 
@@ -41,14 +41,14 @@ make test
 Output:
 
 ```text
-dist/artifacts/machine-driver-bundle-0.16.5-linux-amd64.tar.xz
+dist/artifacts/machine-driver-bundle-0.16.6-linux-amd64.tar.xz
 ```
 
 Artifacts built directly from a checkout are review candidates. A GitHub Release, when present, is the reviewed distribution and its package is covered by GitHub Artifact Attestation generated from the protected default branch. Catalog changes, container-registry changes, and deployment remain intentionally excluded from this workflow.
 
 ## October 2026 security maintenance
 
-The source patches select `golang.org/x/net v0.60.0` and its required x/crypto, x/sys, x/term, and x/text updates. The patched module manifests and sums remain checksum-locked; CI rebuilds and checks the exact binaries before release.
+The source patches select official `golang.org/x/net v0.62.0` and its required x/crypto, x/sys, x/term, x/text and x/sync updates. This fixes [CVE-2026-78661](https://pkg.go.dev/vuln/GO-2026-6860) and [CVE-2026-97045](https://pkg.go.dev/vuln/GO-2026-6866) in the HTML parser/renderer without changing Docker Machine transport or provider APIs. The patched module manifests and sums remain checksum-locked; CI rebuilds and checks the exact binaries before release.
 
 Maintained Go builds select the patched Go 1.27.3 compiler without raising the existing Go language requirement. Python tooling uses the patched pip/CA path; CI interpreter pins remain on the Python 3.14 series. Release artifacts must pass the repository's existing checks before publication.
 
@@ -59,5 +59,5 @@ finding with an official fix blocks release, regardless of severity. Unknown
 findings block unless a separately reviewed, exact not-affected statement is
 proved by the actual product dependency graph. LOW/MEDIUM findings without an
 official fix require the repository's exact CVE/package/version/PURL review ledger;
-new or changed findings fail closed. This policy-only update does not replace any
+new or changed findings fail closed. This new numeric release is qualified separately and does not replace any
 already published immutable artifact.
