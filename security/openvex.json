@@ -1,6 +1,6 @@
 {
   "@context": "https://openvex.dev/ns/v0.2.0",
-  "@id": "https://github.com/PastureStack/machine-driver-bundle/security/openvex/0.16.6",
+  "@id": "https://github.com/PastureStack/machine-driver-bundle/security/openvex/0.16.7",
   "author": "PastureStack Security",
   "timestamp": "2026-10-29T10:37:19.322581+00:00",
   "version": 2,
