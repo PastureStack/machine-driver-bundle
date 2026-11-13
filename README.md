@@ -4,8 +4,8 @@ PastureStack is an independent community effort to preserve, audit, and moderniz
 
 This repository builds the Linux AMD64 machine-management bundle consumed by
 the PastureStack compatibility server. This source selects numeric version
-`0.16.6` for the bundle and both rebuilt executables. Checkout builds are review
-candidates; the matching [GitHub Release](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.6)
+`0.16.7` for the bundle and both rebuilt executables. Checkout builds are review
+candidates; the matching [GitHub Release](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.7)
 is the immutable distribution after its protected-main release gate completes.
 
 ## Reviewed inputs
@@ -41,7 +41,7 @@ make test
 Output:
 
 ```text
-dist/artifacts/machine-driver-bundle-0.16.6-linux-amd64.tar.xz
+dist/artifacts/machine-driver-bundle-0.16.7-linux-amd64.tar.xz
 ```
 
 Artifacts built directly from a checkout are review candidates. A GitHub Release, when present, is the reviewed distribution and its package is covered by GitHub Artifact Attestation generated from the protected default branch. Catalog changes, container-registry changes, and deployment remain intentionally excluded from this workflow.
@@ -50,7 +50,7 @@ Artifacts built directly from a checkout are review candidates. A GitHub Release
 
 The source patches select official `golang.org/x/net v0.62.0` and its required x/crypto, x/sys, x/term, x/text and x/sync updates. This fixes [CVE-2026-78661](https://pkg.go.dev/vuln/GO-2026-6860) and [CVE-2026-97045](https://pkg.go.dev/vuln/GO-2026-6866) in the HTML parser/renderer without changing Docker Machine transport or provider APIs. The patched module manifests and sums remain checksum-locked; CI rebuilds and checks the exact binaries before release.
 
-Maintained Go builds select the patched Go 1.27.3 compiler without raising the existing Go language requirement. Python tooling uses the patched pip/CA path; CI interpreter pins remain on the Python 3.14 series. Release artifacts must pass the repository's existing checks before publication.
+Maintained Go builds select the patched Go 1.27.4 compiler without raising the existing Go language requirement. Python tooling uses the patched pip/CA path; CI interpreter pins remain on the Python 3.14 series. Release artifacts must pass the repository's existing checks before publication.
 
 ## Full-severity release policy
 
