@@ -4,15 +4,15 @@ PastureStack is an independent community effort to preserve, audit, and moderniz
 
 This repository builds the Linux AMD64 machine-management bundle consumed by
 the PastureStack compatibility server. This source selects numeric version
-`0.16.7` for the bundle and both rebuilt executables. Checkout builds are review
-candidates; the matching [GitHub Release](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.7)
+`0.16.8` for the bundle and both rebuilt executables. Checkout builds are review
+candidates; the matching [GitHub Release](https://github.com/PastureStack/machine-driver-bundle/releases/tag/v0.16.8)
 is the immutable distribution after its protected-main release gate completes.
 
 ## Reviewed inputs
 
 - Docker Machine is rebuilt from GitLab's maintained fork at upstream source tag `v0.16.2-gitlab.52`, commit `95d190cbe55757b4212b69d0a278151d1faaaf66`. That external tag is recorded only as an immutable source coordinate.
 - The compatibility provider is rebuilt from Equinix's final release `0.6.0`, commit `1579a8271d52e00760e38dd153d3935abc302915`, with the protocol-compatible binary name `docker-machine-driver-packet`.
-- Both binaries are built with Go `1.27.3`. The zero-fuzz source patch migrates the linked cloud clients to maintained SDKs, including AWS SDK v2 and Azure Track 2 with managed disks; resulting `go.mod` and `go.sum` hashes are locked.
+- Both binaries are built with Go `1.27.4`. The zero-fuzz source patch migrates the linked cloud clients to maintained SDKs, including AWS SDK v2 and Azure Track 2 with managed disks; resulting `go.mod` and `go.sum` hashes are locked.
 
 The official GitLab checksum manifest is verified with its release signature and the exact GitLab signing-key fingerprint before any source is built. Source archives, licenses, patched module files, and output binaries are independently SHA-256 pinned.
 
@@ -41,7 +41,7 @@ make test
 Output:
 
 ```text
-dist/artifacts/machine-driver-bundle-0.16.7-linux-amd64.tar.xz
+dist/artifacts/machine-driver-bundle-0.16.8-linux-amd64.tar.xz
 ```
 
 Artifacts built directly from a checkout are review candidates. A GitHub Release, when present, is the reviewed distribution and its package is covered by GitHub Artifact Attestation generated from the protected default branch. Catalog changes, container-registry changes, and deployment remain intentionally excluded from this workflow.
@@ -51,6 +51,13 @@ Artifacts built directly from a checkout are review candidates. A GitHub Release
 The source patches select official `golang.org/x/net v0.62.0` and its required x/crypto, x/sys, x/term, x/text and x/sync updates. This fixes [CVE-2026-78661](https://pkg.go.dev/vuln/GO-2026-6860) and [CVE-2026-97045](https://pkg.go.dev/vuln/GO-2026-6866) in the HTML parser/renderer without changing Docker Machine transport or provider APIs. The patched module manifests and sums remain checksum-locked; CI rebuilds and checks the exact binaries before release.
 
 Maintained Go builds select the patched Go 1.27.4 compiler without raising the existing Go language requirement. Python tooling uses the patched pip/CA path; CI interpreter pins remain on the Python 3.14 series. Release artifacts must pass the repository's existing checks before publication.
+
+## November 2026 security maintenance
+
+The Docker Machine dependency locks select OpenTelemetry Go `v1.47.0` for
+[CVE-2026-128085](https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-q7gw-24fr-5p69).
+The upstream release corrects attribute value length enforcement in the trace
+module and SDKs.
 
 ## Full-severity release policy
 
